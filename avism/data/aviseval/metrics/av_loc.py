@@ -21,8 +21,6 @@ def compute_av_loc(data):
     frame_num_all = data['num_timesteps']
     gt_classes = data['gt_classes']
     gt_dets = data['gt_dets']
-    raw_classes = data['raw_classes']
-    raw_dets = data['raw_dets']
     pred_classes = data['tracker_classes']
     pred_dets = data['tracker_dets']
 
@@ -83,12 +81,15 @@ def compute_av_loc(data):
         for frame_id in range(frame_num_all):
             # classes
             gt_classes_per_frame = gt_classes[frame_id]
-            raw_classes_per_frame = raw_classes[frame_id]
             pred_classes_per_frame = pred_classes[frame_id]
             # masks
             gt_dets_per_frame = gt_dets[frame_id]
-            raw_dets_per_frame = raw_dets[frame_id]
             pred_dets_per_frame = pred_dets[frame_id]
+            gt_ids_per_frame = data['gt_ids'][frame_id]
+            tracker_ids_per_frame = data['tracker_ids'][frame_id]
+
+            gt_local_index = {track_id: idx for idx, track_id in enumerate(gt_ids_per_frame)}
+            tracker_local_index = {track_id: idx for idx, track_id in enumerate(tracker_ids_per_frame)}
 
             if len(pred_dets_per_frame) > 0:
                 pred_dets_per_frame_f = [di for di in pred_dets_per_frame if di['counts'] != 'PPTl0']
@@ -104,26 +105,37 @@ def compute_av_loc(data):
                 # 2) single sound source
                 elif len(gt_dets_per_frame) == 1:
                     frame_num_s_all += 1
-                    index_gt = [index for index, value in enumerate(raw_dets_per_frame) if value is not None][0]
-                    index_pred = [index for index, element in enumerate(match_cols) if element == index_gt]
-                    if index_pred != []:
-                        ious = mask_utils.iou(gt_dets_per_frame, [pred_dets_per_frame[index_pred[0]]], [False])
+                    gt_track_id = int(gt_ids_per_frame[0])
+                    matched_pred_ids = match_cols[match_rows == gt_track_id]
+                    if len(matched_pred_ids) > 0 and int(matched_pred_ids[0]) in tracker_local_index:
+                        pred_local_idx = tracker_local_index[int(matched_pred_ids[0])]
+                        ious = mask_utils.iou(gt_dets_per_frame, [pred_dets_per_frame[pred_local_idx]], [False])
                         if np.all(ious > alpha):
                             frame_num_s_tp += 1
                 # 3) multi sound source
                 else:
                     frame_num_m_all += 1
-                    flags = [0] * len(match_rows)
-                    for tr in range(len(match_rows)):
-                        if (raw_classes_per_frame[match_rows[tr]] == pred_classes_per_frame[match_cols[tr]]):
-                            if raw_dets_per_frame[match_rows[tr]] == None:
-                                if pred_dets_per_frame[match_cols[tr]]['counts'] == 'PPTl0':
-                                    flags[tr] = 1
-                            else:
-                                iou = mask_utils.iou([raw_dets_per_frame[match_rows[tr]]],
-                                                     [pred_dets_per_frame[match_cols[tr]]], [False])
-                                if np.all(iou > alpha):
-                                    flags[tr] = 1
+                    flags = [0] * len(gt_ids_per_frame)
+                    for gt_pos, gt_track_id in enumerate(gt_ids_per_frame):
+                        matched_pred_ids = match_cols[match_rows == gt_track_id]
+                        if len(matched_pred_ids) == 0:
+                            continue
+                        pred_track_id = int(matched_pred_ids[0])
+                        if pred_track_id not in tracker_local_index:
+                            continue
+
+                        gt_local_idx = gt_local_index[int(gt_track_id)]
+                        pred_local_idx = tracker_local_index[pred_track_id]
+                        if gt_classes_per_frame[gt_local_idx] != pred_classes_per_frame[pred_local_idx]:
+                            continue
+
+                        iou = mask_utils.iou(
+                            [gt_dets_per_frame[gt_local_idx]],
+                            [pred_dets_per_frame[pred_local_idx]],
+                            [False],
+                        )
+                        if np.all(iou > alpha):
+                            flags[gt_pos] = 1
                     if all(ff == 1 for ff in flags):
                         frame_num_m_tp += 1
             else:
