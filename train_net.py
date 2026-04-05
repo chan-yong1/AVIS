@@ -7,7 +7,7 @@ except:
     pass
 
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1,2'
 
 import copy
 import itertools
