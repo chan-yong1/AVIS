@@ -448,6 +448,7 @@ class AVISM(nn.Module):
         indices = torch.nonzero(scores_per_video > confidence).squeeze(-1)
         scores_per_video = scores_per_video[indices]
         labels_per_video = labels_per_video[indices]
+        indices = indices.to(masks_per_video.device)
         masks_per_video = masks_per_video[indices]
 
         processed_results = {
