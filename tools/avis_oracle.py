@@ -13,7 +13,12 @@ from scipy.optimize import linear_sum_assignment
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "AVISM" / "data"))
+for candidate in (REPO_ROOT / "avism" / "data", REPO_ROOT / "AVISM" / "data"):
+    if candidate.exists():
+        sys.path.insert(0, str(candidate))
+        break
+else:
+    raise FileNotFoundError("Could not locate aviseval package under avism/data or AVISM/data")
 import aviseval  # noqa: E402
 
 
