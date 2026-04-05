@@ -68,11 +68,6 @@ def ensure_rle(segmentation, height, width):
     return ensure_serializable_rle(mask_utils.merge(rles))
 
 
-def encode_empty_rle(height, width):
-    rle = mask_utils.encode(np.asfortranarray(np.zeros((height, width, 1), dtype=np.uint8)))[0]
-    return ensure_serializable_rle(rle)
-
-
 def seg_area(segmentation):
     if segmentation is None:
         return 0.0
@@ -157,10 +152,9 @@ def make_output_track(template, segmentations, score=None, category_id=None):
 
 
 def make_gt_output_track(gt_track, video_info_item, score=1.0):
-    empty_seg = encode_empty_rle(video_info_item["height"], video_info_item["width"])
     full_segmentations = []
     for seg in gt_track["segmentations"]:
-        full_segmentations.append(copy_segmentation(seg) if is_active(seg) else copy_segmentation(empty_seg))
+        full_segmentations.append(copy_segmentation(seg) if is_active(seg) else None)
     return {
         "video_id": gt_track["video_id"],
         "score": float(score),
@@ -224,7 +218,6 @@ def build_mask_oracle(pred_tracks, gt_tracks, video_info_item, min_track_iou):
 
 
 def build_sounding_oracle(pred_tracks, gt_tracks, video_info_item, min_track_iou):
-    empty_seg = encode_empty_rle(video_info_item["height"], video_info_item["width"])
     output_tracks = [make_output_track(track, track["segmentations"]) for track in pred_tracks]
     matches = build_track_match(gt_tracks, pred_tracks, min_track_iou)
     for pred_idx, gt_idx in matches.items():
@@ -239,12 +232,11 @@ def build_sounding_oracle(pred_tracks, gt_tracks, video_info_item, min_track_iou
                 else:
                     output_tracks[pred_idx]["segmentations"][frame_idx] = copy_segmentation(gt_seg)
             else:
-                output_tracks[pred_idx]["segmentations"][frame_idx] = copy_segmentation(empty_seg)
+                output_tracks[pred_idx]["segmentations"][frame_idx] = None
     return output_tracks
 
 
 def build_association_oracle(pred_tracks, gt_tracks, video_info_item, min_frame_iou):
-    empty_seg = encode_empty_rle(video_info_item["height"], video_info_item["width"])
     used_frames = [set() for _ in pred_tracks]
     oracle_tracks = {}
     oracle_scores = defaultdict(list)
@@ -283,7 +275,7 @@ def build_association_oracle(pred_tracks, gt_tracks, video_info_item, min_frame_
                         "video_id": gt_tracks[gt_idx]["video_id"],
                         "score": 0.0,
                         "category_id": gt_tracks[gt_idx]["category_id"],
-                        "segmentations": [copy_segmentation(empty_seg) for _ in range(video_info_item["length"])],
+                        "segmentations": [None for _ in range(video_info_item["length"])],
                     }
                 oracle_tracks[gt_idx]["segmentations"][frame_idx] = copy_segmentation(pred_tracks[pred_idx]["segmentations"][frame_idx])
                 oracle_scores[gt_idx].append(pred_tracks[pred_idx]["score"])
@@ -299,7 +291,7 @@ def build_association_oracle(pred_tracks, gt_tracks, video_info_item, min_frame_
         has_active = False
         for frame_idx, seg in enumerate(pred_track["segmentations"]):
             if frame_idx in used_frames[pred_idx] and is_active(seg):
-                segmentations.append(copy_segmentation(empty_seg))
+                segmentations.append(None)
             else:
                 segmentations.append(copy_segmentation(seg))
                 if is_active(seg):
